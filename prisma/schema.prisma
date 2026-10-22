@@ -1,0 +1,241 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum ProductStatus {
+  NOT_ANALYZED
+  IN_VALIDATION
+  PROMISING
+  WAITING
+  DISCARDED
+}
+
+enum Marketplace {
+  MERCADO_LIVRE
+  SHOPEE
+  AMAZON
+  MAGALU
+  SHEIN
+  OTHER
+}
+
+enum CommercialTransactionStatus {
+  DRAFT
+  QUOTE_RECEIVED
+  UNDER_ANALYSIS
+  APPROVED
+  ORDER_EFFECTIVE
+  PARTIALLY_RECEIVED
+  COMPLETED
+  CANCELLED
+}
+
+enum SupplierDocumentType {
+  QUOTE
+  PURCHASE_ORDER
+  INVOICE
+  OTHER
+}
+
+model Supplier {
+  id          String   @id @default(uuid())
+  name        String
+  document    String?
+  contactName String?
+  email       String?
+  phone       String?
+  website     String?
+  notes       String?
+  imagePath   String?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  catalogs     Catalog[]
+  products     Product[]
+  transactions CommercialTransaction[]
+  documents    SupplierDocument[]
+
+  @@index([name])
+}
+
+model Catalog {
+  id           String   @id @default(uuid())
+  supplierId   String
+  title        String
+  fileName     String
+  originalName String
+  filePath     String
+  fileUrl      String?
+  fileSize     Int?
+  mimeType     String?
+  notes        String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  supplier Supplier  @relation(fields: [supplierId], references: [id], onDelete: Cascade)
+  products Product[]
+
+  @@index([supplierId])
+}
+
+model Product {
+  id            String        @id @default(uuid())
+  supplierId    String
+  catalogId     String?
+  name          String
+  referenceCode String?
+  brand         String?
+  model         String?
+  ean           String?
+  cost          Decimal?      @db.Decimal(12, 2)
+  description   String?
+  sourcePage    Int?
+  status        ProductStatus @default(NOT_ANALYZED)
+  justification String?
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  supplier      Supplier               @relation(fields: [supplierId], references: [id], onDelete: Cascade)
+  catalog       Catalog?               @relation(fields: [catalogId], references: [id], onDelete: SetNull)
+  images        ProductImage[]
+  statusHistory ProductStatusHistory[]
+  researches    MarketplaceResearch[]
+
+  @@index([supplierId])
+  @@index([catalogId])
+  @@index([status])
+  @@index([ean])
+  @@index([referenceCode])
+}
+
+model ProductImage {
+  id           String   @id @default(uuid())
+  productId    String
+  fileName     String
+  originalName String
+  filePath     String
+  fileUrl      String
+  mimeType     String
+  fileSize     Int
+  sortOrder    Int      @default(0)
+  createdAt    DateTime @default(now())
+
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@index([productId])
+}
+
+model ProductStatusHistory {
+  id            String         @id @default(uuid())
+  productId     String
+  oldStatus     ProductStatus?
+  newStatus     ProductStatus
+  justification String?
+  createdAt     DateTime       @default(now())
+
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@index([productId])
+}
+
+model MarketplaceResearch {
+  id              String      @id @default(uuid())
+  productId       String
+  marketplace     Marketplace
+  searchedTerm    String
+  estimatedDemand Int?
+  competition     Int?
+  salePrice       Decimal?    @db.Decimal(12, 2)
+  marketplaceFee  Decimal?    @db.Decimal(12, 2)
+  shippingCost    Decimal?    @db.Decimal(12, 2)
+  taxCost         Decimal?    @db.Decimal(12, 2)
+  otherCosts      Decimal?    @db.Decimal(12, 2)
+  estimatedProfit Decimal?    @db.Decimal(12, 2)
+  estimatedMargin Decimal?    @db.Decimal(8, 2)
+  notes           String?
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@index([productId])
+  @@index([marketplace])
+}
+
+model CommercialTransaction {
+  id         String @id @default(uuid())
+  supplierId String
+
+  quoteReference String?
+  orderReference String?
+
+  quoteDate          DateTime?
+  orderEffectiveDate DateTime?
+
+  status CommercialTransactionStatus @default(DRAFT)
+  notes  String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  supplier      Supplier                             @relation(fields: [supplierId], references: [id], onDelete: Cascade)
+  documents     SupplierDocument[]
+  statusHistory CommercialTransactionStatusHistory[]
+
+  @@index([supplierId])
+  @@index([status])
+  @@index([quoteDate])
+  @@index([orderEffectiveDate])
+}
+
+model SupplierDocument {
+  id            String  @id @default(uuid())
+  supplierId    String
+  transactionId String?
+
+  type           SupplierDocumentType
+  title          String
+  documentNumber String?
+
+  originalName String
+  fileName     String
+  filePath     String
+  fileUrl      String?
+  fileSize     Int?
+  mimeType     String?
+
+  documentDate DateTime?
+  notes        String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  supplier    Supplier               @relation(fields: [supplierId], references: [id], onDelete: Cascade)
+  transaction CommercialTransaction? @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+
+  @@index([supplierId])
+  @@index([transactionId])
+  @@index([type])
+  @@index([documentNumber])
+}
+
+model CommercialTransactionStatusHistory {
+  id            String @id @default(uuid())
+  transactionId String
+
+  oldStatus CommercialTransactionStatus?
+  newStatus CommercialTransactionStatus
+  notes     String?
+
+  createdAt DateTime @default(now())
+
+  transaction CommercialTransaction @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+
+  @@index([transactionId])
+}
