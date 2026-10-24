@@ -9,8 +9,10 @@ import productRoutes from "./routes/product.routes";
 import supplierRoutes from "./routes/supplier.routes";
 import catalogRoutes from "./routes/catalog.routes";
 import researchRoutes from "./routes/marketplace-research.routes";
-import { errorMiddleware } from "./middlewares/error.middleware";
 import commercialTransactionRoutes from "./routes/commercial-transaction.routes";
+import quoteListRoutes from "./routes/quote-list.routes";
+import dashboardRoutes from "./routes/dashboard.routes";
+import { errorMiddleware } from "./middlewares/error.middleware";
 
 const app = express();
 
@@ -101,6 +103,8 @@ app.use("/catalogs", catalogRoutes);
 app.use("/products", productRoutes);
 app.use("/marketplace-research", researchRoutes);
 app.use("/transactions", commercialTransactionRoutes);
+app.use("/quote-lists", quoteListRoutes);
+app.use("/dashboard", dashboardRoutes);
 
 app.use(errorMiddleware);
 

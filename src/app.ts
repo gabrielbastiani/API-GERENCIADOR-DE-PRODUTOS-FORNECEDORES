@@ -11,6 +11,7 @@ import productRoutes from "./routes/product.routes";
 import researchRoutes from "./routes/marketplace-research.routes";
 import commercialTransactionRoutes from "./routes/commercial-transaction.routes";
 import { errorMiddleware } from "./middlewares/error.middleware";
+import quoteListRoutes from "./routes/quote-list.routes";
 
 dotenv.config();
 
@@ -64,6 +65,7 @@ app.use("/api", catalogRoutes);
 app.use("/api/products", productRoutes);
 app.use("/api", researchRoutes);
 app.use("/api/transactions", commercialTransactionRoutes);
+app.use("/quote-lists", quoteListRoutes);
 
 app.use((_request, response) => {
   response.status(404).json({

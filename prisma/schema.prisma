@@ -42,6 +42,12 @@ enum SupplierDocumentType {
   OTHER
 }
 
+enum QuoteListStatus {
+  DRAFT
+  SENT
+  ARCHIVED
+}
+
 model Supplier {
   id          String   @id @default(uuid())
   name        String
@@ -60,6 +66,7 @@ model Supplier {
   products     Product[]
   transactions CommercialTransaction[]
   documents    SupplierDocument[]
+  quoteLists   QuoteList[]
 
   @@index([name])
 }
@@ -101,11 +108,12 @@ model Product {
   createdAt     DateTime      @default(now())
   updatedAt     DateTime      @updatedAt
 
-  supplier      Supplier               @relation(fields: [supplierId], references: [id], onDelete: Cascade)
-  catalog       Catalog?               @relation(fields: [catalogId], references: [id], onDelete: SetNull)
-  images        ProductImage[]
-  statusHistory ProductStatusHistory[]
-  researches    MarketplaceResearch[]
+  supplier       Supplier               @relation(fields: [supplierId], references: [id], onDelete: Cascade)
+  catalog        Catalog?               @relation(fields: [catalogId], references: [id], onDelete: SetNull)
+  images         ProductImage[]
+  statusHistory  ProductStatusHistory[]
+  researches     MarketplaceResearch[]
+  quoteListItems QuoteListItem[]
 
   @@index([supplierId])
   @@index([catalogId])
@@ -238,4 +246,45 @@ model CommercialTransactionStatusHistory {
   transaction CommercialTransaction @relation(fields: [transactionId], references: [id], onDelete: Cascade)
 
   @@index([transactionId])
+}
+
+model QuoteList {
+  id     String          @id @default(cuid())
+  name   String
+  notes  String?
+  status QuoteListStatus @default(DRAFT)
+
+  supplierId String
+  supplier   Supplier @relation(fields: [supplierId], references: [id], onDelete: Cascade)
+
+  items QuoteListItem[]
+
+  sentAt    DateTime?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  @@index([supplierId])
+  @@index([status])
+  @@index([createdAt])
+}
+
+model QuoteListItem {
+  id String @id @default(cuid())
+
+  quoteListId String
+  quoteList   QuoteList @relation(fields: [quoteListId], references: [id], onDelete: Cascade)
+
+  productId String
+  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  // Cópia dos dados no momento em que o produto entrou na lista
+  productName      String
+  productCode      String? @map("referenceCode")
+  productReference String?
+
+  createdAt DateTime @default(now())
+
+  @@unique([quoteListId, productId])
+  @@index([quoteListId])
+  @@index([productId])
 }
