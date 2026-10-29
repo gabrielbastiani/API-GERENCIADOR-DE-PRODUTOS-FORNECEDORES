@@ -67,6 +67,7 @@ model Supplier {
   transactions CommercialTransaction[]
   documents    SupplierDocument[]
   quoteLists   QuoteList[]
+  purchases    Purchase[]
 
   @@index([name])
 }
@@ -108,12 +109,14 @@ model Product {
   createdAt     DateTime      @default(now())
   updatedAt     DateTime      @updatedAt
 
-  supplier       Supplier               @relation(fields: [supplierId], references: [id], onDelete: Cascade)
-  catalog        Catalog?               @relation(fields: [catalogId], references: [id], onDelete: SetNull)
-  images         ProductImage[]
-  statusHistory  ProductStatusHistory[]
-  researches     MarketplaceResearch[]
-  quoteListItems QuoteListItem[]
+  supplier         Supplier                    @relation(fields: [supplierId], references: [id], onDelete: Cascade)
+  catalog          Catalog?                    @relation(fields: [catalogId], references: [id], onDelete: SetNull)
+  images           ProductImage[]
+  statusHistory    ProductStatusHistory[]
+  researches       MarketplaceResearch[]
+  quoteListItems   QuoteListItem[]
+  purchaseItems    PurchaseItem[]
+  transactionItems CommercialTransactionItem[]
 
   @@index([supplierId])
   @@index([catalogId])
@@ -194,7 +197,9 @@ model CommercialTransaction {
 
   supplier      Supplier                             @relation(fields: [supplierId], references: [id], onDelete: Cascade)
   documents     SupplierDocument[]
+  purchases     Purchase[]
   statusHistory CommercialTransactionStatusHistory[]
+  items         CommercialTransactionItem[]
 
   @@index([supplierId])
   @@index([status])
@@ -287,4 +292,68 @@ model QuoteListItem {
   @@unique([quoteListId, productId])
   @@index([quoteListId])
   @@index([productId])
+}
+
+enum PurchaseSource {
+  MANUAL
+  XML
+}
+
+model Purchase {
+  id            String         @id @default(uuid())
+  supplierId    String
+  invoiceNumber String?
+  invoiceKey    String?        @unique
+  purchaseDate  DateTime?
+  freightTotal  Decimal        @default(0) @db.Decimal(12, 2)
+  notes         String?
+  source        PurchaseSource @default(MANUAL)
+  transactionId String?
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+
+  supplier    Supplier               @relation(fields: [supplierId], references: [id], onDelete: Cascade)
+  transaction CommercialTransaction? @relation(fields: [transactionId], references: [id], onDelete: SetNull)
+  items       PurchaseItem[]
+
+  @@index([supplierId])
+  @@index([purchaseDate])
+  @@index([transactionId])
+  @@index([invoiceNumber])
+}
+
+model PurchaseItem {
+  id         String   @id @default(uuid())
+  purchaseId String
+  productId  String?
+  position   Int      @default(0)
+  name       String
+  code       String?
+  quantity   Decimal  @db.Decimal(14, 3)
+  unitPrice  Decimal  @db.Decimal(16, 6)
+  imageUrl   String?
+  createdAt  DateTime @default(now())
+
+  purchase Purchase @relation(fields: [purchaseId], references: [id], onDelete: Cascade)
+  product  Product? @relation(fields: [productId], references: [id], onDelete: SetNull)
+
+  @@index([purchaseId])
+  @@index([productId])
+}
+
+model CommercialTransactionItem {
+  id            String                @id @default(uuid())
+  transactionId String
+  transaction   CommercialTransaction @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+  productId     String?
+  product       Product?              @relation(fields: [productId], references: [id], onDelete: SetNull)
+  name          String
+  code          String?
+  quantity      Int
+  unitPrice     Decimal               @db.Decimal(12, 2)
+  sortOrder     Int                   @default(0)
+  createdAt     DateTime              @default(now())
+  updatedAt     DateTime              @updatedAt
+
+  @@index([transactionId])
 }

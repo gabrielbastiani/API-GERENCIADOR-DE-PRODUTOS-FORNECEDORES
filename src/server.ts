@@ -12,6 +12,8 @@ import researchRoutes from "./routes/marketplace-research.routes";
 import commercialTransactionRoutes from "./routes/commercial-transaction.routes";
 import quoteListRoutes from "./routes/quote-list.routes";
 import dashboardRoutes from "./routes/dashboard.routes";
+import purchaseRoutes from "./routes/purchase.routes";
+import { cleanupOrphanPurchaseImages } from "./utils/purchase-images";
 import { errorMiddleware } from "./middlewares/error.middleware";
 
 const app = express();
@@ -91,6 +93,13 @@ app.use(
   express.static(productImageStorageDirectory)
 );
 
+app.use(
+  "/uploads/purchases",
+  express.static(
+    path.resolve(process.env.PURCHASE_IMAGE_DIRECTORY ?? "./storage/purchases")
+  )
+);
+
 app.get("/health", (_request, response) => {
   return response.json({
     status: "ok",
@@ -104,6 +113,7 @@ app.use("/products", productRoutes);
 app.use("/marketplace-research", researchRoutes);
 app.use("/transactions", commercialTransactionRoutes);
 app.use("/quote-lists", quoteListRoutes);
+app.use("/purchases", purchaseRoutes);
 app.use("/dashboard", dashboardRoutes);
 
 app.use(errorMiddleware);
@@ -111,3 +121,12 @@ app.use(errorMiddleware);
 app.listen(port, () => {
   console.log(`API executando em http://localhost:${port}`);
 });
+
+cleanupOrphanPurchaseImages().catch(() => undefined);
+
+setInterval(
+  () => {
+    cleanupOrphanPurchaseImages().catch(() => undefined);
+  },
+  6 * 60 * 60 * 1000
+);

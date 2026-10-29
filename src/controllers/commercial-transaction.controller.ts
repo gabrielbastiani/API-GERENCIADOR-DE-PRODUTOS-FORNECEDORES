@@ -62,6 +62,30 @@ const createDocumentSchema = z.object({
   notes: optionalText
 });
 
+const transactionItemsSchema = z.object({
+  items: z
+    .array(
+      z.object({
+        productId: z.string().uuid().nullable().optional(),
+        name: z.string().trim().min(1, "Informe o nome do item."),
+        code: z.string().trim().nullable().optional(),
+        quantity: z
+          .number()
+          .int("A quantidade deve ser um número inteiro.")
+          .min(1, "A quantidade mínima é 1."),
+        unitPrice: z.number().min(0, "O preço não pode ser negativo.")
+      })
+    )
+    .max(500, "Limite de 500 itens por negociação.")
+});
+
+function serializeItem(item: any) {
+  return {
+    ...item,
+    unitPrice: Number(item.unitPrice)
+  };
+}
+
 function emptyToNull(value: string | undefined) {
   if (value === undefined || value.trim() === "") {
     return null;
@@ -106,10 +130,10 @@ function serializeDocument<
       document.fileUrl ??
       (document.transactionId
         ? getCommercialDocumentUrl(
-            request,
-            document.transactionId,
-            document.fileName
-          )
+          request,
+          document.transactionId,
+          document.fileName
+        )
         : null)
   };
 }
@@ -119,7 +143,8 @@ function serializeTransaction(request: Request, transaction: any) {
     ...transaction,
     documents: transaction.documents?.map((document: any) =>
       serializeDocument(request, document)
-    )
+    ),
+    items: transaction.items?.map(serializeItem)
   };
 }
 
@@ -140,7 +165,12 @@ function transactionInclude() {
       orderBy: {
         createdAt: "desc" as const
       }
-    }
+    },
+    items: {
+      orderBy: {
+        sortOrder: "asc" as const
+      }
+    },
   };
 }
 
@@ -221,30 +251,40 @@ export async function listTransactions(
     const transactions = await prisma.commercialTransaction.findMany({
       where,
       include: {
-  supplier: {
-    select: {
-      id: true,
-      name: true
-    }
-  },
-  documents: {
-    orderBy: {
-      createdAt: "desc"
-    }
-  },
-  _count: {
-    select: {
-      documents: true,
-      statusHistory: true
-    }
-  }
-},
+        supplier: {
+          select: {
+            id: true,
+            name: true
+          }
+        },
+        documents: {
+          orderBy: {
+            createdAt: "desc"
+          }
+        },
+        items: {
+          orderBy: {
+            sortOrder: "asc"
+          }
+        },
+        _count: {
+          select: {
+            documents: true,
+            statusHistory: true
+          }
+        }
+      },
       orderBy: {
         updatedAt: "desc"
       }
     });
 
-    return response.json(transactions);
+    return response.json(
+      transactions.map((transaction) => ({
+        ...transaction,
+        items: transaction.items.map(serializeItem)
+      }))
+    );
   } catch (error) {
     next(error);
   }
@@ -738,6 +778,105 @@ export async function deleteTransactionDocument(
     await deleteStoredFiles([document.filePath]);
 
     return response.status(204).send();
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function listTransactionItems(
+  request: Request,
+  response: Response,
+  next: NextFunction
+) {
+  try {
+    const items = await prisma.commercialTransactionItem.findMany({
+      where: { transactionId: request.params.id },
+      orderBy: { sortOrder: "asc" }
+    });
+
+    return response.json(items.map(serializeItem));
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function replaceTransactionItems(
+  request: Request,
+  response: Response,
+  next: NextFunction
+) {
+  try {
+    const parsed = transactionItemsSchema.safeParse(request.body ?? {});
+
+    if (!parsed.success) {
+      return response.status(400).json({
+        message:
+          parsed.error.issues[0]?.message ?? "Itens inválidos.",
+        errors: parsed.error.flatten()
+      });
+    }
+
+    const transaction = await prisma.commercialTransaction.findUnique({
+      where: { id: request.params.id }
+    });
+
+    if (!transaction) {
+      return response.status(404).json({
+        message: "Orçamento ou pedido não encontrado."
+      });
+    }
+
+    const productIds = Array.from(
+      new Set(
+        parsed.data.items
+          .map((item) => item.productId)
+          .filter((id): id is string => Boolean(id))
+      )
+    );
+
+    if (productIds.length > 0) {
+      const products = await prisma.product.findMany({
+        where: {
+          id: { in: productIds },
+          supplierId: transaction.supplierId
+        },
+        select: { id: true }
+      });
+
+      if (products.length !== productIds.length) {
+        return response.status(400).json({
+          message:
+            "Um ou mais produtos não pertencem ao fornecedor desta negociação."
+        });
+      }
+    }
+
+    const items = await prisma.$transaction(async (tx) => {
+      await tx.commercialTransactionItem.deleteMany({
+        where: { transactionId: transaction.id }
+      });
+
+      if (parsed.data.items.length > 0) {
+        await tx.commercialTransactionItem.createMany({
+          data: parsed.data.items.map((item, index) => ({
+            transactionId: transaction.id,
+            productId: item.productId ?? null,
+            name: item.name,
+            code: item.code ? item.code : null,
+            quantity: item.quantity,
+            unitPrice: item.unitPrice,
+            sortOrder: index
+          }))
+        });
+      }
+
+      return tx.commercialTransactionItem.findMany({
+        where: { transactionId: transaction.id },
+        orderBy: { sortOrder: "asc" }
+      });
+    });
+
+    return response.json(items.map(serializeItem));
   } catch (error) {
     next(error);
   }

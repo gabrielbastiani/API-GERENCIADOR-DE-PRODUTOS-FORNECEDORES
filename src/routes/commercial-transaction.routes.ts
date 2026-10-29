@@ -6,7 +6,9 @@ import {
   deleteTransactionDocument,
   getTransaction,
   listTransactionDocuments,
+  listTransactionItems,
   listTransactions,
+  replaceTransactionItems,
   updateTransaction,
   updateTransactionStatus
 } from "../controllers/commercial-transaction.controller";
@@ -44,5 +46,9 @@ commercialTransactionRoutes.delete(
   "/:id/documents/:documentId",
   deleteTransactionDocument
 );
+
+commercialTransactionRoutes.get("/:id/items", listTransactionItems);
+
+commercialTransactionRoutes.put("/:id/items", replaceTransactionItems);
 
 export default commercialTransactionRoutes;
