@@ -14,6 +14,8 @@ import quoteListRoutes from "./routes/quote-list.routes";
 import dashboardRoutes from "./routes/dashboard.routes";
 import purchaseRoutes from "./routes/purchase.routes";
 import { cleanupOrphanPurchaseImages } from "./utils/purchase-images";
+import { startFiscalScheduler } from "./services/fiscal/sync";
+import fiscalRoutes from "./routes/fiscal.routes";
 import { errorMiddleware } from "./middlewares/error.middleware";
 
 const app = express();
@@ -114,13 +116,10 @@ app.use("/marketplace-research", researchRoutes);
 app.use("/transactions", commercialTransactionRoutes);
 app.use("/quote-lists", quoteListRoutes);
 app.use("/purchases", purchaseRoutes);
+app.use("/fiscal", fiscalRoutes);
 app.use("/dashboard", dashboardRoutes);
 
 app.use(errorMiddleware);
-
-app.listen(port, () => {
-  console.log(`API executando em http://localhost:${port}`);
-});
 
 cleanupOrphanPurchaseImages().catch(() => undefined);
 
@@ -130,3 +129,8 @@ setInterval(
   },
   6 * 60 * 60 * 1000
 );
+
+app.listen(port, () => {
+  console.log(`API executando em http://localhost:${port}`);
+  startFiscalScheduler();
+});

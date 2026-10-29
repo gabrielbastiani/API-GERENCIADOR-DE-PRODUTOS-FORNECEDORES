@@ -1,0 +1,6 @@
+export class FiscalError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "FiscalError";
+  }
+}

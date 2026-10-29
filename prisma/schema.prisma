@@ -62,12 +62,13 @@ model Supplier {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  catalogs     Catalog[]
-  products     Product[]
-  transactions CommercialTransaction[]
-  documents    SupplierDocument[]
-  quoteLists   QuoteList[]
-  purchases    Purchase[]
+  catalogs         Catalog[]
+  products         Product[]
+  transactions     CommercialTransaction[]
+  documents        SupplierDocument[]
+  quoteLists       QuoteList[]
+  purchases        Purchase[]
+  receivedInvoices ReceivedInvoice[]
 
   @@index([name])
 }
@@ -356,4 +357,55 @@ model CommercialTransactionItem {
   updatedAt     DateTime              @updatedAt
 
   @@index([transactionId])
+}
+
+model FiscalCertificate {
+  id                String    @id @default(uuid())
+  cnpj              String    @unique
+  companyName       String?
+  ufCode            Int
+  environment       Int       @default(1)
+  pfxEncrypted      String    @db.Text
+  passwordEncrypted String    @db.Text
+  validFrom         DateTime
+  validTo           DateTime
+  autoCiencia       Boolean   @default(false)
+  autoSync          Boolean   @default(true)
+  lastNsu           String    @default("000000000000000")
+  maxNsu            String?
+  blockedUntil      DateTime?
+  lastSyncAt        DateTime?
+  lastSyncStatus    String?
+  lastSyncMessage   String?   @db.Text
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  invoices ReceivedInvoice[]
+}
+
+model ReceivedInvoice {
+  id              String            @id @default(uuid())
+  certificateId   String
+  certificate     FiscalCertificate @relation(fields: [certificateId], references: [id], onDelete: Cascade)
+  accessKey       String            @unique
+  nsu             String
+  issuerCnpj      String
+  issuerName      String
+  number          String?
+  series          String?
+  issuedAt        DateTime?
+  totalValue      Decimal           @db.Decimal(14, 2)
+  hasFullXml      Boolean           @default(false)
+  xmlContent      String?           @db.Text
+  cancelled       Boolean           @default(false)
+  manifestStatus  String            @default("NONE")
+  manifestMessage String?
+  supplierId      String?
+  supplier        Supplier?         @relation(fields: [supplierId], references: [id], onDelete: SetNull)
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+
+  @@index([issuerCnpj])
+  @@index([supplierId])
+  @@index([issuedAt])
 }
