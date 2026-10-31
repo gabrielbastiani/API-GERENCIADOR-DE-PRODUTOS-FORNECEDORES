@@ -10,6 +10,8 @@ Crie um arquivo .env com base no .env.example e configure nele a string de conex
 Aplique as migrations para criar ou atualizar a estrutura do banco e gere o cliente do Prisma:
 
 npx prisma migrate dev
+ou
+npx prisma migrate deploy = para produção
 npx prisma generate
 
 ## Prospecção de fornecedores com dados abertos do CNPJ
