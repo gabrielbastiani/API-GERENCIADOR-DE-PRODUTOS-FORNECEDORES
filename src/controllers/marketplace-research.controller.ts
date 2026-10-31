@@ -31,6 +31,15 @@ function round2(value: number) {
   return Math.round(value * 100) / 100;
 }
 
+function disableResearchCache(response: Response) {
+  response.setHeader(
+    "Cache-Control",
+    "no-store, no-cache, must-revalidate, proxy-revalidate"
+  );
+  response.setHeader("Pragma", "no-cache");
+  response.setHeader("Expires", "0");
+}
+
 function buildData(input: ResearchInput, productCost: unknown) {
   const cost =
     productCost === null || productCost === undefined
@@ -81,6 +90,7 @@ export async function listResearch(
   next: NextFunction
 ) {
   try {
+    disableResearchCache(response);
     const productId = String(request.query.productId ?? "");
 
     if (!productId) {
@@ -106,6 +116,7 @@ export async function createResearch(
   next: NextFunction
 ) {
   try {
+    disableResearchCache(response);
     const parsed = researchSchema.safeParse(request.body);
 
     if (!parsed.success) {
@@ -129,7 +140,8 @@ export async function createResearch(
     const research = await prisma.marketplaceResearch.create({
       data: {
         productId: product.id,
-        ...buildData(parsed.data, product.cost)
+        ...buildData(parsed.data, product.cost),
+        searchedTerm: parsed.data.searchedTerm.trim()
       }
     });
 
@@ -145,6 +157,7 @@ export async function updateResearch(
   next: NextFunction
 ) {
   try {
+    disableResearchCache(response);
     const parsed = updateResearchSchema.safeParse(request.body);
 
     if (!parsed.success) {
@@ -167,7 +180,11 @@ export async function updateResearch(
 
     const research = await prisma.marketplaceResearch.update({
       where: { id: current.id },
-      data: buildData(parsed.data, current.product.cost)
+      data: {
+        ...buildData(parsed.data, current.product.cost),
+        // Campo persistido explicitamente na edição.
+        searchedTerm: parsed.data.searchedTerm.trim()
+      }
     });
 
     return response.json(research);
@@ -182,6 +199,7 @@ export async function deleteResearch(
   next: NextFunction
 ) {
   try {
+    disableResearchCache(response);
     const current = await prisma.marketplaceResearch.findUnique({
       where: { id: request.params.id }
     });

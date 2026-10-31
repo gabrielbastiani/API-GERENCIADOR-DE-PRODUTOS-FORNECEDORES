@@ -95,6 +95,10 @@ function onlyDigits(value: unknown) {
   return String(value ?? "").replace(/\D/g, "");
 }
 
+function normalizeTaxIdentifier(value: unknown) {
+  return String(value ?? "").toUpperCase().replace(/[^A-Z0-9]/g, "");
+}
+
 function toNumber(value: unknown) {
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : 0;
@@ -458,7 +462,7 @@ async function buildXmlPreview(xmlText: string, forcedSupplierId?: string) {
     10
   );
 
-  const issuerDocument = onlyDigits(inf.emit?.CNPJ ?? inf.emit?.CPF);
+  const issuerDocument = normalizeTaxIdentifier(inf.emit?.CNPJ ?? inf.emit?.CPF);
   const issuerName = String(inf.emit?.xNome ?? "");
   const freightTotal = toNumber(inf.total?.ICMSTot?.vFrete);
 
@@ -472,7 +476,7 @@ async function buildXmlPreview(xmlText: string, forcedSupplierId?: string) {
 
     supplierId =
       suppliers.find(
-        (supplier) => onlyDigits(supplier.document) === issuerDocument
+        (supplier) => normalizeTaxIdentifier(supplier.document) === issuerDocument
       )?.id ?? null;
   }
 

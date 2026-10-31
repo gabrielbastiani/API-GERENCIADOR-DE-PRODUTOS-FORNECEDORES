@@ -15,8 +15,8 @@ const BLOCK_MINUTES = 61;
 const MAX_ROUNDS_PER_RUN = 30;
 const running = new Set<string>();
 
-function onlyDigits(value: string | null | undefined) {
-  return (value ?? "").replace(/\D/g, "");
+function normalizeTaxIdentifier(value: string | null | undefined) {
+  return (value ?? "").toUpperCase().replace(/[^A-Z0-9]/g, "");
 }
 
 export function loadCertificateRecord(record: FiscalCertificate): LoadedCertificate {
@@ -39,7 +39,7 @@ async function buildSupplierMap() {
   const map = new Map<string, string>();
 
   for (const supplier of suppliers) {
-    const digits = onlyDigits(supplier.document);
+    const digits = normalizeTaxIdentifier(supplier.document);
 
     if (digits) {
       map.set(digits, supplier.id);
@@ -85,7 +85,7 @@ async function storeDocument(
 
   const data = {
     nsu: doc.nsu,
-    issuerCnpj: onlyDigits(parsed.issuerCnpj),
+    issuerCnpj: normalizeTaxIdentifier(parsed.issuerCnpj),
     issuerName: parsed.issuerName,
     number: parsed.number,
     series: parsed.series,
@@ -94,7 +94,7 @@ async function storeDocument(
     cancelled: parsed.cancelled,
     hasFullXml: parsed.kind === "invoice",
     xmlContent: parsed.kind === "invoice" ? doc.xml : null,
-    supplierId: supplierMap.get(onlyDigits(parsed.issuerCnpj)) ?? null
+    supplierId: supplierMap.get(normalizeTaxIdentifier(parsed.issuerCnpj)) ?? null
   };
 
   if (existing) {

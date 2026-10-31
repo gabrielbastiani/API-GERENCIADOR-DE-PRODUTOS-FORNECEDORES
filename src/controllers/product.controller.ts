@@ -360,8 +360,10 @@ export async function listProducts(
   try {
     const {
       supplierId,
+      catalogId,
       status,
       search,
+      sourcePageOrder,
       activeSuppliersOnly,
       page = "1",
       limit = "20"
@@ -373,10 +375,35 @@ export async function listProducts(
     const where: Prisma.ProductWhereInput = {};
 
     if (typeof supplierId === "string" && supplierId.trim() !== "") {
-      where.supplierId = supplierId;
+      where.supplierId = supplierId.trim();
     }
 
-        // Oculta produtos de fornecedores inativos quando solicitado.
+    if (typeof catalogId === "string" && catalogId.trim() !== "") {
+      const parsedCatalogId = z.string().uuid().safeParse(catalogId.trim());
+
+      if (!parsedCatalogId.success) {
+        return response.status(400).json({
+          message: "Catálogo inválido."
+        });
+      }
+
+      where.catalogId = parsedCatalogId.data;
+    }
+
+    // Ordena páginas numericamente e mantém produtos sem página no final.
+    let pageSort: "asc" | "desc" | undefined;
+
+    if (typeof sourcePageOrder === "string" && sourcePageOrder.trim() !== "") {
+      if (sourcePageOrder !== "asc" && sourcePageOrder !== "desc") {
+        return response.status(400).json({
+          message: "Ordenação da página do catálogo inválida."
+        });
+      }
+
+      pageSort = sourcePageOrder;
+    }
+
+    // Oculta produtos de fornecedores inativos quando solicitado.
     if (activeSuppliersOnly === "true") {
       where.supplier = {
         isActive: true
@@ -407,6 +434,19 @@ export async function listProducts(
       ];
     }
 
+    const orderBy: Prisma.ProductOrderByWithRelationInput[] = pageSort
+      ? [
+          {
+            sourcePage: {
+              sort: pageSort,
+              nulls: "last"
+            }
+          },
+          { createdAt: "desc" },
+          { name: "asc" }
+        ]
+      : [{ createdAt: "desc" }];
+
     const [products, total] = await Promise.all([
       prisma.product.findMany({
         where,
@@ -419,9 +459,7 @@ export async function listProducts(
             }
           }
         },
-        orderBy: {
-          createdAt: "desc"
-        },
+        orderBy,
         skip: (currentPage - 1) * pageSize,
         take: pageSize
       }),

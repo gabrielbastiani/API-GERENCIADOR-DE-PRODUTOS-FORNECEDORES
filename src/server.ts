@@ -16,6 +16,7 @@ import purchaseRoutes from "./routes/purchase.routes";
 import { cleanupOrphanPurchaseImages } from "./utils/purchase-images";
 import { startFiscalScheduler } from "./services/fiscal/sync";
 import fiscalRoutes from "./routes/fiscal.routes";
+import prospectingRoutes from "./routes/prospecting.routes";
 import { errorMiddleware } from "./middlewares/error.middleware";
 
 const app = express();
@@ -117,6 +118,7 @@ app.use("/transactions", commercialTransactionRoutes);
 app.use("/quote-lists", quoteListRoutes);
 app.use("/purchases", purchaseRoutes);
 app.use("/fiscal", fiscalRoutes);
+app.use("/prospecting", prospectingRoutes);
 app.use("/dashboard", dashboardRoutes);
 
 app.use(errorMiddleware);

@@ -140,6 +140,9 @@ export async function distributionQuery(
   );
 
   const parsed = xmlParser.parse(responseXml);
+
+  console.log("[fiscal] resposta SEFAZ:", responseXml.slice(0, 1500));
+  
   const ret = findNode(parsed, "retDistDFeInt");
 
   if (!ret) {

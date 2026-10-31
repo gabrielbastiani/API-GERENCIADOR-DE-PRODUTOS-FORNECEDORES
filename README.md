@@ -11,3 +11,7 @@ Aplique as migrations para criar ou atualizar a estrutura do banco e gere o clie
 
 npx prisma migrate dev
 npx prisma generate
+
+## Prospecção de fornecedores com dados abertos do CNPJ
+
+A implementação da pesquisa local por situação cadastral, município e CNAE está documentada em [`docs/PROSPECCAO-CNPJ.md`](docs/PROSPECCAO-CNPJ.md). Ela usa uma base independente do cadastro comercial `Supplier`; a importação de uma empresa para `Supplier` continua sendo uma ação explícita do usuário.

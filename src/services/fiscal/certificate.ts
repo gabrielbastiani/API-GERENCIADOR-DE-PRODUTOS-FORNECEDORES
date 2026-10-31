@@ -1,5 +1,6 @@
 import forge from "node-forge";
 import { FiscalError } from "./errors";
+import { isValidCnpj, normalizeCnpj } from "../../utils/cnpj";
 
 export type LoadedCertificate = {
   keyPem: string;
@@ -65,7 +66,9 @@ export function loadPfx(pfx: Buffer, password: string): LoadedCertificate {
 
   const others = certs.filter((cert) => cert !== leaf);
   const commonName = String(leaf.subject.getField("CN")?.value ?? "");
-  const cnpjMatch = commonName.match(/(\d{14})/);
+  const normalizedCommonName = normalizeCnpj(commonName);
+  const cnpjCandidates = normalizedCommonName.match(/[A-Z0-9]{12}\d{2}/g) ?? [];
+  const cnpjMatch = cnpjCandidates.find((candidate) => isValidCnpj(candidate));
 
   return {
     keyPem: forge.pki.privateKeyToPem(privateKey),
@@ -77,7 +80,7 @@ export function loadPfx(pfx: Buffer, password: string): LoadedCertificate {
       forge.asn1.toDer(forge.pki.certificateToAsn1(leaf)).getBytes()
     ),
     subjectName: commonName,
-    cnpj: cnpjMatch ? cnpjMatch[1] : null,
+    cnpj: cnpjMatch ?? null,
     validFrom: leaf.validity.notBefore,
     validTo: leaf.validity.notAfter
   };

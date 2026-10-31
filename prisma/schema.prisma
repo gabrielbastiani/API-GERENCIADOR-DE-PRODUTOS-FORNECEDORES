@@ -1,10 +1,12 @@
 generator client {
-  provider = "prisma-client-js"
+  provider        = "prisma-client-js"
+  previewFeatures = ["postgresqlExtensions"]
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider   = "postgresql"
+  url        = env("DATABASE_URL")
+  extensions = [pg_trgm]
 }
 
 enum ProductStatus {
@@ -71,6 +73,7 @@ model Supplier {
   receivedInvoices ReceivedInvoice[]
 
   @@index([name])
+  @@index([document])
 }
 
 model Catalog {
@@ -409,3 +412,126 @@ model ReceivedInvoice {
   @@index([supplierId])
   @@index([issuedAt])
 }
+
+enum CnpjImportStatus {
+  RUNNING
+  PUBLISHED
+  SUPERSEDED
+  FAILED
+}
+
+model CnpjImportBatch {
+  id                         String           @id @default(uuid())
+  competence                 String
+  states                     String[]
+  status                     CnpjImportStatus @default(RUNNING)
+  source                     String           @default("RECEITA_FEDERAL")
+  activeCandidatesCount      Int              @default(0)
+  companiesCount             Int              @default(0)
+  establishmentsCount        Int              @default(0)
+  meiExcludedCount           Int              @default(0)
+  skippedMissingCompanyCount Int              @default(0)
+  errorMessage               String?          @db.Text
+  startedAt                  DateTime         @default(now())
+  finishedAt                 DateTime?
+
+  companies      CnpjCompany[]
+
+  @@index([status, finishedAt])
+  @@index([competence])
+}
+
+model CnpjCompany {
+  cnpjBase                    String @db.VarChar(8)
+  batchId                     String
+  corporateName               String @db.VarChar(255)
+  legalNatureCode             String? @db.VarChar(4)
+  responsibleQualificationCode String? @db.VarChar(2)
+  capitalSocial               Decimal? @db.Decimal(20, 2)
+  companySizeCode             String? @db.VarChar(2)
+  federalEntity               String? @db.VarChar(100)
+
+  batch          CnpjImportBatch      @relation(fields: [batchId], references: [id], onDelete: Cascade)
+  establishments CnpjEstablishment[]
+
+  @@id([cnpjBase, batchId])
+  @@index([batchId, corporateName])
+  @@index([batchId, companySizeCode])
+  @@index([corporateName(ops: raw("gin_trgm_ops"))], type: Gin, map: "CnpjCompany_corporateName_trgm_idx")
+}
+
+model CnpjEstablishment {
+  cnpj                   String   @db.VarChar(14)
+  batchId                String
+  cnpjBase               String   @db.VarChar(8)
+  cnpjOrder              String   @db.VarChar(4)
+  cnpjDv                 String   @db.VarChar(2)
+  establishmentType      String?  @db.VarChar(1)
+  fantasyName            String?  @db.VarChar(255)
+  registrationStatus     String   @db.VarChar(2)
+  registrationStatusDate String?  @db.VarChar(8)
+  registrationReasonCode String?  @db.VarChar(2)
+  foreignCityName        String?
+  countryCode            String?
+  activityStartDate      String?  @db.VarChar(8)
+  mainCnaeCode           String   @db.VarChar(7)
+  secondaryCnaeCodes     String[] @default([])
+  streetType             String?
+  streetName             String?
+  streetNumber           String?
+  addressComplement      String?
+  neighborhood           String?
+  postalCode             String?
+  uf                     String   @db.VarChar(2)
+  municipalityCode       String
+  ddd1                   String?
+  phone1                 String?
+  ddd2                   String?
+  phone2                 String?
+  faxDdd                 String?
+  faxNumber              String?
+  email                  String?
+  specialStatus          String?
+  specialStatusDate      String?  @db.VarChar(8)
+  createdAt              DateTime @default(now())
+
+  company     CnpjCompany           @relation(fields: [cnpjBase, batchId], references: [cnpjBase, batchId], onDelete: Cascade)
+  mainCnae    CnaeReference         @relation(fields: [mainCnaeCode], references: [code], onDelete: Restrict)
+  municipality MunicipalityReference @relation(fields: [municipalityCode], references: [code], onDelete: Restrict)
+
+  @@id([cnpj, batchId])
+  @@index([cnpj])
+  @@index([batchId, uf, municipalityCode])
+  @@index([batchId, mainCnaeCode])
+  @@index([secondaryCnaeCodes], type: Gin)
+  @@index([fantasyName(ops: raw("gin_trgm_ops"))], type: Gin, map: "CnpjEstablishment_fantasyName_trgm_idx")
+  @@index([batchId, fantasyName])
+  @@index([batchId, cnpjBase])
+}
+
+model CnaeReference {
+  code        String @id @db.VarChar(7)
+  description String @db.VarChar(255)
+
+  establishments CnpjEstablishment[]
+}
+
+model MunicipalityReference {
+  code String @id
+  name String @db.VarChar(255)
+
+  establishments CnpjEstablishment[]
+}
+
+model CnpjGeoCache {
+  cnpj               String   @id @db.VarChar(14)
+  latitude           Float
+  longitude          Float
+  addressFingerprint String   @db.Text
+  provider           String   @default("NOMINATIM")
+  geocodedAt         DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  @@index([geocodedAt])
+}
+

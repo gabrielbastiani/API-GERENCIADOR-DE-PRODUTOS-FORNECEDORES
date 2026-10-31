@@ -5,6 +5,7 @@ import { prisma } from "../lib/prisma";
 import { loadPfx } from "../services/fiscal/certificate";
 import { encrypt } from "../services/fiscal/crypto";
 import { FiscalError } from "../services/fiscal/errors";
+import { isValidCnpj, normalizeCnpj } from "../utils/cnpj";
 import {
   fetchByAccessKey,
   manifestInvoice,
@@ -101,16 +102,16 @@ export async function saveCertificate(
       throw new FiscalError("O certificado informado está vencido.");
     }
 
-    const cnpj = loaded.cnpj ?? (input.cnpj ?? "").replace(/\D/g, "");
+    const cnpj = normalizeCnpj(loaded.cnpj ?? input.cnpj ?? "");
 
-    if (!/^\d{14}$/.test(cnpj)) {
+    if (!isValidCnpj(cnpj)) {
       throw new FiscalError(
         "Não foi possível identificar o CNPJ no certificado. Informe o CNPJ da empresa."
       );
     }
 
     if (input.cnpj && loaded.cnpj) {
-      const typed = input.cnpj.replace(/\D/g, "");
+      const typed = normalizeCnpj(input.cnpj);
 
       if (typed && typed.slice(0, 8) !== loaded.cnpj.slice(0, 8)) {
         throw new FiscalError("O CNPJ informado não corresponde ao do certificado.");
@@ -247,17 +248,16 @@ export async function listInvoices(
     const where: Prisma.ReceivedInvoiceWhereInput = {};
 
     if (search) {
+      const normalizedTaxId = normalizeCnpj(search);
       const digits = search.replace(/\D/g, "");
 
       where.OR = [
         { issuerName: { contains: search, mode: "insensitive" } },
         { number: { contains: search } },
-        ...(digits
-          ? [
-              { issuerCnpj: { contains: digits } },
-              { accessKey: { contains: digits } }
-            ]
-          : [])
+        ...(normalizedTaxId
+          ? [{ issuerCnpj: { contains: normalizedTaxId } }]
+          : []),
+        ...(digits ? [{ accessKey: { contains: digits } }] : [])
       ];
     }
 
