@@ -52,17 +52,52 @@ function toItemData(product: {
 export async function listQuoteLists(req: Request, res: Response) {
   try {
     const status = req.query.status as QuoteListStatus | undefined;
-    const supplierId = req.query.supplierId as string | undefined;
+    const supplierId = typeof req.query.supplierId === "string"
+      ? req.query.supplierId
+      : undefined;
+    const usePagination = req.query.page !== undefined || req.query.limit !== undefined;
 
     if (status && !Object.values(QuoteListStatus).includes(status)) {
       return res.status(400).json({ message: "Status inválido." });
     }
 
+    const where = {
+      ...(status ? { status } : {}),
+      ...(supplierId ? { supplierId } : {})
+    };
+
+    if (usePagination) {
+      const rawPage = typeof req.query.page === "string" ? Number(req.query.page) : 1;
+      const rawLimit = typeof req.query.limit === "string" ? Number(req.query.limit) : 12;
+      const page = Number.isInteger(rawPage) && rawPage > 0 ? rawPage : 1;
+      const limit = Number.isInteger(rawLimit) && rawLimit > 0 ? Math.min(rawLimit, 100) : 12;
+      const skip = (page - 1) * limit;
+
+      const [lists, total] = await Promise.all([
+        prisma.quoteList.findMany({
+          where,
+          include: quoteListInclude,
+          orderBy: { updatedAt: "desc" },
+          skip,
+          take: limit
+        }),
+        prisma.quoteList.count({ where })
+      ]);
+
+      return res.json({
+        data: lists,
+        pagination: {
+          page,
+          limit,
+          total,
+          totalPages: Math.ceil(total / limit)
+        }
+      });
+    }
+
+    // Mantém o formato de array para os consumidores antigos da API.
     const lists = await prisma.quoteList.findMany({
-      where: {
-        ...(status ? { status } : {}),
-        ...(supplierId ? { supplierId } : {})
-      },
+      where,
       include: quoteListInclude,
       orderBy: { updatedAt: "desc" }
     });

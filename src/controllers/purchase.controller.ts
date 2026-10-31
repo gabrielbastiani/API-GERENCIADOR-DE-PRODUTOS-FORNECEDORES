@@ -153,31 +153,112 @@ function buildItems(items: z.infer<typeof itemSchema>[]) {
 
 /* ------------------------------------------------------------------ */
 
+function purchaseSqlWhere(
+  alias: "p" | "p2",
+  filters: { supplierId?: string; search?: string; transactionId?: string }
+) {
+  const tableAlias = Prisma.raw(alias);
+  const conditions: Prisma.Sql[] = [];
+
+  if (filters.supplierId) {
+    conditions.push(Prisma.sql`${tableAlias}."supplierId" = ${filters.supplierId}`);
+  }
+
+  if (filters.transactionId) {
+    conditions.push(Prisma.sql`${tableAlias}."transactionId" = ${filters.transactionId}`);
+  }
+
+  if (filters.search) {
+    conditions.push(Prisma.sql`${tableAlias}."invoiceNumber" ILIKE ${`%${filters.search}%`}`);
+  }
+
+  return conditions.length > 0
+    ? Prisma.sql`WHERE ${Prisma.join(conditions, " AND ")}`
+    : Prisma.empty;
+}
+
 export async function listPurchases(
   request: Request,
   response: Response,
   next: NextFunction
 ) {
   try {
-        const { supplierId, search, transactionId } = request.query;
+    const supplierId = typeof request.query.supplierId === "string"
+      ? request.query.supplierId.trim()
+      : "";
+    const transactionId = typeof request.query.transactionId === "string"
+      ? request.query.transactionId.trim()
+      : "";
+    const search = typeof request.query.search === "string"
+      ? request.query.search.trim()
+      : "";
+    const filters = {
+      ...(supplierId ? { supplierId } : {}),
+      ...(transactionId ? { transactionId } : {}),
+      ...(search ? { search } : {})
+    };
 
-    const where: Prisma.PurchaseWhereInput = {};
+    const where: Prisma.PurchaseWhereInput = {
+      ...(supplierId ? { supplierId } : {}),
+      ...(transactionId ? { transactionId } : {}),
+      ...(search
+        ? {
+            invoiceNumber: {
+              contains: search,
+              mode: "insensitive"
+            }
+          }
+        : {})
+    };
 
-    if (typeof supplierId === "string" && supplierId.trim() !== "") {
-      where.supplierId = supplierId;
+    const usePagination = request.query.page !== undefined || request.query.limit !== undefined;
+
+    if (usePagination) {
+      const rawPage = typeof request.query.page === "string" ? Number(request.query.page) : 1;
+      const rawLimit = typeof request.query.limit === "string" ? Number(request.query.limit) : 20;
+      const page = Number.isInteger(rawPage) && rawPage > 0 ? rawPage : 1;
+      const limit = Number.isInteger(rawLimit) && rawLimit > 0 ? Math.min(rawLimit, 100) : 20;
+      const skip = (page - 1) * limit;
+
+      const [purchases, total, totals] = await Promise.all([
+        prisma.purchase.findMany({
+          where,
+          include: purchaseInclude,
+          orderBy: [{ purchaseDate: "desc" }, { createdAt: "desc" }],
+          skip,
+          take: limit
+        }),
+        prisma.purchase.count({ where }),
+        prisma.$queryRaw<Array<{ totalSpent: Prisma.Decimal }>>(Prisma.sql`
+          SELECT
+            COALESCE((
+              SELECT SUM(p."freightTotal")
+              FROM "Purchase" p
+              ${purchaseSqlWhere("p", filters)}
+            ), 0)
+            +
+            COALESCE((
+              SELECT SUM(ROUND(pi."quantity" * pi."unitPrice", 2))
+              FROM "PurchaseItem" pi
+              INNER JOIN "Purchase" p2 ON p2."id" = pi."purchaseId"
+              ${purchaseSqlWhere("p2", filters)}
+            ), 0) AS "totalSpent"
+        `)
+      ]);
+
+      return response.json({
+        data: purchases.map(serializePurchase),
+        pagination: {
+          page,
+          limit,
+          total,
+          totalPages: Math.ceil(total / limit)
+        },
+        totalSpent: Number(totals[0]?.totalSpent ?? 0)
+      });
     }
 
-        if (typeof transactionId === "string" && transactionId.trim() !== "") {
-      where.transactionId = transactionId;
-    }
-
-    if (typeof search === "string" && search.trim() !== "") {
-      where.invoiceNumber = {
-        contains: search.trim(),
-        mode: "insensitive"
-      };
-    }
-
+    // Mantém o formato de array para os consumidores antigos da API.
     const purchases = await prisma.purchase.findMany({
       where,
       include: purchaseInclude,

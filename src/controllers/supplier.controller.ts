@@ -70,17 +70,64 @@ function serializeSupplier<T extends { imagePath: string | null }>(
   };
 }
 
+function parsePagination(request: Request, defaultLimit = 20) {
+  const rawPage = typeof request.query.page === "string"
+    ? Number(request.query.page)
+    : 1;
+  const rawLimit = typeof request.query.limit === "string"
+    ? Number(request.query.limit)
+    : defaultLimit;
+
+  const page = Number.isInteger(rawPage) && rawPage > 0 ? rawPage : 1;
+  const limit = Number.isInteger(rawLimit) && rawLimit > 0
+    ? Math.min(rawLimit, 100)
+    : defaultLimit;
+
+  return { page, limit, skip: (page - 1) * limit };
+}
+
 export async function listSuppliers(
   request: Request,
   response: Response,
   next: NextFunction
 ) {
   try {
+    const usePagination = request.query.page !== undefined || request.query.limit !== undefined;
+    const search = typeof request.query.search === "string"
+      ? request.query.search.trim()
+      : "";
+
+    const where = {
+      ...(request.query.includeInactive === "false" ? { isActive: true } : {}),
+      ...(search ? { name: { contains: search, mode: "insensitive" as const } } : {})
+    };
+
+    if (usePagination) {
+      const { page, limit, skip } = parsePagination(request);
+      const [suppliers, total] = await Promise.all([
+        prisma.supplier.findMany({
+          where,
+          include: countInclude,
+          orderBy: { name: "asc" },
+          skip,
+          take: limit
+        }),
+        prisma.supplier.count({ where })
+      ]);
+
+      return response.json({
+        data: suppliers.map((supplier) => serializeSupplier(request, supplier)),
+        pagination: {
+          page,
+          limit,
+          total,
+          totalPages: Math.ceil(total / limit)
+        }
+      });
+    }
+
     const suppliers = await prisma.supplier.findMany({
-      where:
-        request.query.includeInactive === "false"
-          ? { isActive: true }
-          : undefined,
+      where,
       include: countInclude,
       orderBy: { name: "asc" }
     });
