@@ -12,7 +12,9 @@ A tela `/prospeccao` consulta a base local importada do Dados Abertos do CNPJ. O
 
 ## 2. Arquivos necessários
 
-Coloque na mesma pasta os ZIPs oficiais:
+Crie na raiz da API estas pastas/subpastas = data/cnpj/2026-10
+
+Coloque na mesma pasta "2026-10" os ZIPs oficiais:
 
 - `Empresas*.zip`
 - `Estabelecimentos*.zip`
